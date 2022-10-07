@@ -2,7 +2,7 @@ import requests
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
-from .consts import USERNAME, SENDGRID_API_KEY, PUSH_TOKEN, PUSH_USER
+from consts import USERNAME, SENDGRID_API_KEY, PUSH_TOKEN, PUSH_USER
 
 
 def send_notification(msg):

@@ -1,164 +1,117 @@
 # -*- coding: utf8 -*-
 
 import time
-import json
+import random
 from datetime import datetime
 
 import requests
 from bs4 import BeautifulSoup
 
+from consts import base_headers, MY_SCHEDULE_DATE, COUNTRY_CODE, USERNAME, PASSWORD, DATE_URL, TIME_URL, SCHEDULE_ID, APPOINTMENT_URL, FACILITY_ID, COOLDOWN_TIME
 from notification import send_notification, push_notification
+from errors import LoginError, AccountBannedError, RescheduleError, SessionExpiredError
 
 
-# def MY_CONDITION(month, day): return int(month) == 11 and int(day) >= 5
-def MY_CONDITION(month, day): 
-    return True # No custom condition wanted for the new scheduled date
+def get_retry_time():
+    return random.randint(60, 80)
 
 
-def get_date():
-    global last_yatry_cookie
+class VisaScheduler(object):
+    def __init__(self, base_headers):
+        self.session = requests.Session()
+        self.current_date = MY_SCHEDULE_DATE
 
-    if last_yatry_cookie == "":
-        driver.get(DATE_URL)
-        if not is_logged_in():
-            login()
-            return get_date()
+        self.session.headers.update(base_headers)
+
+    def login(self):
+        login_url = f'https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/users/sign_in'
+        r = self.session.get(login_url)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        data = {
+            'utf8': soup.find('input', {'name': 'utf8'})['value'],
+            'authenticity_token': soup.find('input', {'name': 'authenticity_token'})['value'],
+            'user[email]': USERNAME,
+            'user[password]': PASSWORD,
+            'policy_confirmed': 1,
+            'commit': 'Sign In',
+        }
+        headers = {
+            'Referer': login_url,
+        }
+        r = self.session.post(login_url, headers=headers, data=data)
+        if(r.text.find(USERNAME) != -1):
+            print('Login successfully.')
         else:
-            content = driver.find_element(By.TAG_NAME, 'pre').text
-            date = json.loads(content)
-            last_yatry_cookie = "_yatri_session=" + driver.get_cookie("_yatri_session")["value"]
-            return date
-    else:
-        headers = base_headers
-        headers["Cookie"] = last_yatry_cookie
-        r = requests.get(DATE_URL, headers=headers)
-        print(r.text)
-        last_yatry_cookie = r.headers['Set-Cookie'].split(";")[0]
-        print(last_yatry_cookie)
-        return r.json()
+            raise LoginError(f'Login failed! Will try again.')
+    
+    def login_with_retries(self):
+        for i in range(0, 5):
+            try:
+                return self.login()
+            except LoginError:
+                time.sleep(120)
+        raise Exception('Login failed too many times.')
+        
+    def get_date(self):
+        r = self.session.get(DATE_URL)
+        # check if logged in
+        if(r.text.find('error') != -1):
+            raise SessionExpiredError('Session expired. Needs to login again.')
+        if(len(r.json()) == 0):
+            raise AccountBannedError(f'Account is banned, needs to wait for several hours.')
+        return r.json()[0]['date']
 
+    def get_time(self, date):
+        time_url = TIME_URL % date
+        r = self.session.get(time_url)
+        if(len(r.json()['available_times']) == 0):
+            raise RescheduleError(f'{date} is fully booked.')
+        return r.json()['available_times'][-1]
+    
+    def get_authenticity_token(self):
+        headers = {
+            'Referer': f'https://ais.usvisa-info.com/en-ca/niv/schedule/{SCHEDULE_ID}/continue_actions',
+        }
+        r = self.session.get(APPOINTMENT_URL, headers=headers)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        utf8 = soup.find('input', {'name': 'utf8'})['value']
+        token = soup.find('input', {'name': 'authenticity_token'})['value']
+        return utf8, token
 
-def get_time(date):
-    global last_yatry_cookie
-
-    print(f" Retrieving latest date for {date}")
-    time_url = TIME_URL % date
-    headers = base_headers
-    headers["Cookie"] = last_yatry_cookie
-    r = requests.get(time_url, headers=headers)
-    data = json.loads(r.text)
-    time = data.get("available_times")[-1]
-    print(f"latest available time for {date}: {time}")
-    last_yatry_cookie = r.headers['Set-Cookie'].split(";")[0]
-    print(last_yatry_cookie)
-    return time
-    # time_url = TIME_URL % date
-    # driver.get(time_url)
-    # content = driver.find_element(By.TAG_NAME, 'pre').text
-    # data = json.loads(content)
-    # time = data.get("available_times")[-1]
-    # print(f"Got time successfully! {date} {time}")
-    # return time
-
-def get_authenticity_token():
-    global last_yatry_cookie
-
-    headers = base_headers
-    headers["Referer"] = "https://ais.usvisa-info.com/en-ca/niv/schedule/42238236/continue_actions"
-    headers["Cookie"] = last_yatry_cookie
-    r = requests.get(APPOINTMENT_URL, headers=headers)
-    soup = BeautifulSoup(r.text, 'html.parser')
-    utf8 = soup.find('input', {'name': 'utf8'})['value']
-    token = soup.find('input', {'name': 'authenticity_token'})['value']
-    print(token)
-    last_yatry_cookie = r.headers['Set-Cookie'].split(";")[0]
-    print(last_yatry_cookie)
-    return utf8, token
-
-
-def reschedule(date):
-    global last_yatry_cookie, EXIT
-    print(f"Starting Reschedule ({date})")
-
-    time = get_time(date)
-    # time = "09:00"
-    utf8, token = get_authenticity_token()
-
-    data = {
-        "utf8": utf8,
-        "authenticity_token": token,
-        "confirmed_limit_message": 1,
-        "use_consulate_appointment_capacity": "true",
-        "appointments[consulate_appointment][facility_id]": FACILITY_ID,
-        "appointments[consulate_appointment][date]": date,
-        "appointments[consulate_appointment][time]": time,
-    }
-
-    headers = base_headers
-    headers["Referer"] = APPOINTMENT_URL
-    headers["Cookie"] = last_yatry_cookie
-    # headers = {
-    #     "User-Agent": driver.execute_script("return navigator.userAgent;"),
-    #     "Referer": APPOINTMENT_URL,
-    #     "Cookie": "_yatri_session=" + driver.get_cookie("_yatri_session")["value"]
-    # }
-
-    r = requests.post(APPOINTMENT_URL, headers=headers, data=data)
-    last_yatry_cookie = r.headers['Set-Cookie'].split(";")[0]
-    print(last_yatry_cookie)
-    if(r.text.find('successfully scheduled') != -1):
-        msg = f"Rescheduled Successfully! {date} {time}"
-        send_notification(msg)
-        MY_SCHEDULE_DATE = date
-        print("updated schedule date to %s", date)
-        # EXIT = True
-    else:
-        print(r.text)
-        msg = f"Reschedule Failed. {date} {time}"
-        send_notification(msg)
-
-
-def is_logged_in():
-    content = driver.page_source
-    if(content.find("error") != -1):
-        return False
-    return True
-
-
-def print_dates(dates):
-    print("Available dates:")
-    for d in dates:
-        print("%s \t business_day: %s" % (d.get('date'), d.get('business_day')))
-    print()
-
-
-last_seen = None
-
-
-def get_available_date(dates):
-    global last_seen
-
-    def is_earlier(date):
-        my_date = datetime.strptime(MY_SCHEDULE_DATE, "%Y-%m-%d")
+    def is_earlier(self, date):
+        my_date = datetime.strptime(self.current_date, "%Y-%m-%d")
         new_date = datetime.strptime(date, "%Y-%m-%d")
         result = my_date > new_date
         print(f'Is {my_date} > {new_date}:\t{result}')
         return result
 
-    print("Checking for an earlier date:")
-    for d in dates:
-        date = d.get('date')
-        if is_earlier(date):
-            return date
-        # if is_earlier(date) and date != last_seen:
-        #     _, month, day = date.split('-')
-            # if(MY_CONDITION(month, day)):
-            #     last_seen = date
-            #     return date
+    def reschedule(self, date):
+        time = self.get_time(date)
+        utf8, token = self.get_authenticity_token()
+        data = {
+            "utf8": utf8,
+            "authenticity_token": token,
+            "confirmed_limit_message": 1,
+            "use_consulate_appointment_capacity": "true",
+            "appointments[consulate_appointment][facility_id]": FACILITY_ID,
+            "appointments[consulate_appointment][date]": date,
+            "appointments[consulate_appointment][time]": time,
+        }
+        headers = {
+            'Referer': APPOINTMENT_URL,
+        }
+        
+        r = self.session.post(APPOINTMENT_URL, headers=headers, data=data)
+        if(r.text.find('successfully scheduled') != -1):
+            self.current_date = date
+            print(f'Rescheduled Successfully! {date} {time}')
+        else:
+            print(f'Reschedule Failed. {date} {time}')
 
 
-if __name__ == "__main__":
-    # login()
+def main():
+    scheduler = VisaScheduler(base_headers)
+    scheduler.login_with_retries()
     retry_count = 0
     while 1:
         if retry_count > 100:
@@ -169,34 +122,24 @@ if __name__ == "__main__":
             print(f"Retry count: {retry_count}")
             print()
 
-            dates = get_date()[:5]
-            if not dates:
-              msg = "List is empty"
-              send_notification(msg)
-              EXIT = False
-            print_dates(dates)
-            date = get_available_date(dates)
-            print()
+            date = scheduler.get_date()
             print(f"New date: {date}")
-            if date:
-                reschedule(date)
-                push_notification(dates)
+            print()
+            if scheduler.is_earlier(date):
+                scheduler.reschedule(date)
+            time.sleep(get_retry_time())
 
-            if(EXIT):
-                print("------------------exit")
-                break
-
-            if not dates:
-              msg = "List is empty"
-              send_notification(msg)
-              #EXIT = True
-              time.sleep(COOLDOWN_TIME)
-            else:
-              time.sleep(RETRY_TIME)
-
-        except:
+        except SessionExpiredError:
+            scheduler.login_with_retries()
+        except AccountBannedError:
+            time.sleep(COOLDOWN_TIME)
+        except RescheduleError:
             retry_count += 1
-            time.sleep(EXCEPTION_TIME)
+            time.sleep(get_retry_time())
+        except Exception as e:
+            print(e)
+            time.sleep(300)
 
-    if(not EXIT):
-        send_notification("HELP! Crashed.")
+
+if __name__ == "__main__":
+    main()
