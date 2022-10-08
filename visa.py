@@ -129,11 +129,14 @@ def main():
                 scheduler.reschedule(date)
             time.sleep(get_retry_time())
 
-        except SessionExpiredError:
+        except SessionExpiredError as e:
+            print(e)
             scheduler.login_with_retries()
-        except AccountBannedError:
+        except AccountBannedError as e:
+            print(e)
             time.sleep(COOLDOWN_TIME)
-        except RescheduleError:
+        except RescheduleError as e:
+            print(e)
             retry_count += 1
             time.sleep(get_retry_time())
         except Exception as e:
