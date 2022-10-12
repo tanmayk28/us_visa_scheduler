@@ -12,18 +12,8 @@ from notification import send_notification, push_notification
 from errors import LoginError, AccountBannedError, RescheduleError, SessionExpiredError
 
 
-sprint_start_time = None
-
 def get_retry_time():
-    global sprint_start_time
-
-    if not sprint_start_time:
-        sprint_start_time = datetime.now()
-
-    if datetime.now() - sprint_start_time >= timedelta(hours=1):
-        sprint_start_time = None
-        return 3600
-    return random.randint(60, 80)
+    return random.randint(40, 50)
 
 
 class VisaScheduler(object):
