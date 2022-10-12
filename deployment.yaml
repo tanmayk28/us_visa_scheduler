@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mew-deployment
+  labels:
+    app: mewmew
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mewmew
+  template:
+    metadata:
+      labels:
+        app: mewmew
+    spec:
+      containers:
+      - name: scheduler
+        image: gcr.io/seven-exp/mewmew
+        env: 
+        - name: PYTHONUNBUFFERED
+          value: "1"
