@@ -13,7 +13,7 @@ from errors import LoginError, AccountBannedError, RescheduleError, SessionExpir
 
 
 def get_retry_time():
-    return random.randint(40, 50)
+    return random.randint(60, 80)
 
 
 class VisaScheduler(object):
