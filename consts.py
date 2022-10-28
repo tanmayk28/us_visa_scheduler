@@ -1,6 +1,5 @@
 import configparser
 
-
 base_headers = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
     'Accept-Encoding': 'gzip, deflate, br',
@@ -31,8 +30,9 @@ SENDGRID_API_KEY = config['SENDGRID']['SENDGRID_API_KEY']
 PUSH_TOKEN = config['PUSHOVER']['PUSH_TOKEN']
 PUSH_USER = config['PUSHOVER']['PUSH_USER']
 
-COOLDOWN_TIME = 30*60  # wait time when temporary banned (empty list): 30 minutes
+COOLDOWN_TIME = 30 * 60  # wait time when temporary banned (empty list): 30 minutes
 
 DATE_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/days/{FACILITY_ID}.json?appointments[expedite]=false"
 TIME_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/times/{FACILITY_ID}.json?date=%s&appointments[expedite]=false"
 APPOINTMENT_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment"
+SCHEDULE_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}"

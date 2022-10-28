@@ -2,13 +2,14 @@
 
 import time
 import random
+import datefinder
 from datetime import datetime, timedelta
 
 import requests
 from bs4 import BeautifulSoup
 
 from consts import base_headers, MY_SCHEDULE_DATE, COUNTRY_CODE, USERNAME, PASSWORD, DATE_URL, TIME_URL, SCHEDULE_ID, \
-    APPOINTMENT_URL, FACILITY_ID, COOLDOWN_TIME
+    APPOINTMENT_URL, SCHEDULE_URL, FACILITY_ID, COOLDOWN_TIME
 from notification import send_notification, push_notification
 from errors import LoginError, AccountBannedError, RescheduleError, SessionExpiredError, NoDateError
 
@@ -53,7 +54,24 @@ class VisaScheduler(object):
                 time.sleep(120)
         raise Exception('Login failed too many times.')
 
+    def update_current_date(self):
+        r = self.session.get(SCHEDULE_URL)
+        # check if logged in
+        if (r.text.find('error') != -1):
+            raise SessionExpiredError('Session expired. Needs to login again.')
+
+        soup = BeautifulSoup(r.text, 'html.parser')
+        matches = datefinder.find_dates(soup.find(class_="consular-appt").text)
+        for match in matches:
+            parsed_date = match.strftime("%Y-%m-%d")
+            if self.current_date != parsed_date:
+                print(f"Updating current date: {self.current_date} --> {parsed_date}")
+                self.current_date = parsed_date
+
     def get_date(self):
+
+        self.update_current_date()
+
         r = self.session.get(DATE_URL)
         # check if logged in
         if (r.text.find('error') != -1):
