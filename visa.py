@@ -7,9 +7,10 @@ from datetime import datetime, timedelta
 import requests
 from bs4 import BeautifulSoup
 
-from consts import base_headers, MY_SCHEDULE_DATE, COUNTRY_CODE, USERNAME, PASSWORD, DATE_URL, TIME_URL, SCHEDULE_ID, APPOINTMENT_URL, FACILITY_ID, COOLDOWN_TIME
+from consts import base_headers, MY_SCHEDULE_DATE, COUNTRY_CODE, USERNAME, PASSWORD, DATE_URL, TIME_URL, SCHEDULE_ID, \
+    APPOINTMENT_URL, FACILITY_ID, COOLDOWN_TIME
 from notification import send_notification, push_notification
-from errors import LoginError, AccountBannedError, RescheduleError, SessionExpiredError
+from errors import LoginError, AccountBannedError, RescheduleError, SessionExpiredError, NoDateError
 
 
 def get_retry_time():
@@ -39,11 +40,11 @@ class VisaScheduler(object):
             'Referer': login_url,
         }
         r = self.session.post(login_url, headers=headers, data=data)
-        if(r.text.find(USERNAME) != -1):
+        if (r.text.find(USERNAME) != -1):
             print('Login successfully.')
         else:
             raise LoginError(f'Login failed! Will try again.')
-    
+
     def login_with_retries(self):
         for i in range(0, 5):
             try:
@@ -51,23 +52,23 @@ class VisaScheduler(object):
             except LoginError:
                 time.sleep(120)
         raise Exception('Login failed too many times.')
-        
+
     def get_date(self):
         r = self.session.get(DATE_URL)
         # check if logged in
-        if(r.text.find('error') != -1):
+        if (r.text.find('error') != -1):
             raise SessionExpiredError('Session expired. Needs to login again.')
-        if(len(r.json()) == 0):
-            raise AccountBannedError(f'Account is banned, needs to wait for several hours.')
+        if (len(r.json()) == 0):
+            raise NoDateError(f'No new date found, going to snooze for {COOLDOWN_TIME / 60} mins')
         return r.json()[0]['date']
 
     def get_time(self, date):
         time_url = TIME_URL % date
         r = self.session.get(time_url)
-        if(len(r.json()['available_times']) == 0):
+        if (len(r.json()['available_times']) == 0):
             raise RescheduleError(f'{date} is fully booked.')
         return r.json()['available_times'][-1]
-    
+
     def get_authenticity_token(self):
         headers = {
             'Referer': f'https://ais.usvisa-info.com/en-ca/niv/schedule/{SCHEDULE_ID}/continue_actions',
@@ -100,9 +101,9 @@ class VisaScheduler(object):
         headers = {
             'Referer': APPOINTMENT_URL,
         }
-        
+
         r = self.session.post(APPOINTMENT_URL, headers=headers, data=data)
-        if(r.text.find('successfully scheduled') != -1):
+        if (r.text.find('successfully scheduled') != -1):
             self.current_date = date
             print(f'Rescheduled Successfully! {date} {time}')
         else:
@@ -132,7 +133,7 @@ def main():
         except SessionExpiredError as e:
             print(e)
             scheduler.login_with_retries()
-        except AccountBannedError as e:
+        except NoDateError as e:
             print(e)
             time.sleep(COOLDOWN_TIME)
         except RescheduleError as e:

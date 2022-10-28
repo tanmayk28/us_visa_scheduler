@@ -10,5 +10,9 @@ class AccountBannedError(Exception):
     pass
 
 
+class NoDateError(Exception):
+    pass
+
+
 class RescheduleError(Exception):
     pass

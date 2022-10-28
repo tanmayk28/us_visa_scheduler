@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mew-deployment
+  name: us-visa-deployment
   labels:
-    app: mewmew
+    app: usvisa
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: mewmew
+      app: usvisa
   template:
     metadata:
       labels:
-        app: mewmew
+        app: usvisa
     spec:
       containers:
       - name: scheduler
-        image: gcr.io/seven-exp/mewmew
+        image: gcr.io/seven-exp/usvisa
         env: 
         - name: PYTHONUNBUFFERED
           value: "1"

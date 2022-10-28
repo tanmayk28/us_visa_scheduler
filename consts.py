@@ -31,7 +31,7 @@ SENDGRID_API_KEY = config['SENDGRID']['SENDGRID_API_KEY']
 PUSH_TOKEN = config['PUSHOVER']['PUSH_TOKEN']
 PUSH_USER = config['PUSHOVER']['PUSH_USER']
 
-COOLDOWN_TIME = 60*60  # wait time when temporary banned (empty list): 60 minutes
+COOLDOWN_TIME = 30*60  # wait time when temporary banned (empty list): 30 minutes
 
 DATE_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/days/{FACILITY_ID}.json?appointments[expedite]=false"
 TIME_URL = f"https://ais.usvisa-info.com/{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/appointment/times/{FACILITY_ID}.json?date=%s&appointments[expedite]=false"
